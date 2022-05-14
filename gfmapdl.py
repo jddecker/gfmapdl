@@ -20,14 +20,21 @@ from latest_user_agents import get_random_user_agent
 
 # command line arguments
 parser = argparse.ArgumentParser(description='Supply a GameFAQs username to download all maps and charts')
-parser.add_argument('gfuser', type=str, help='gamefaqs.gamespot.com username to get maps from (required)')
+parser.add_argument('gfuser', type=str, nargs='?', help='gamefaqs.gamespot.com username to get maps from (required)')
 parser.add_argument('-s', '--savedir', type=str, help='save directory to download to (default: maps/<user>)')
 parser.add_argument('-w', '--wait', type=int, default=30, help='wait time in seconds when script needs to pause (default: 30)')
 parser.add_argument('-d', '--downloads', type=int, default=150, help='how many downloads before waiting (default: 150)')
 parser.add_argument('--version', action='version', version='Release date 20220424')
 args = parser.parse_args()
 
-gfuser = requests.utils.quote(args.gfuser)
+# if no gamefaqs user specified prompt for it
+if not args.gfuser:
+    gfuser = input('User to download maps from: ')
+else:
+    gfuser = args.gfuser
+
+# set variables from argparse
+gfuser = requests.utils.quote(gfuser)
 wait = args.wait
 dl_loops = args.downloads
 
