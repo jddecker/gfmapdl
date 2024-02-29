@@ -1,7 +1,5 @@
 """
 Downloads maps from a GameFAQs profile
-
-Might have to rerun if there are errors from too many requests
 """
 
 import argparse
@@ -12,9 +10,9 @@ from pathlib import Path
 import filetype
 import httpx
 import keyboard
+import progressbar
 from bs4 import BeautifulSoup
 from latest_user_agents import get_random_user_agent
-import progressbar
 
 # command line arguments
 parser = argparse.ArgumentParser(description="Supply a GameFAQs username to download all maps and charts")
@@ -24,7 +22,10 @@ parser.add_argument(
     "-w", "--wait", type=int, default=30, help="wait time in seconds when script needs to pause (default: 30)"
 )
 parser.add_argument("-d", "--downloads", type=int, default=150, help="how many downloads before waiting (default: 150)")
-parser.add_argument("--version", action="version", version="Release date 20220424")
+parser.add_argument(
+    "--logging", default=False, action="store_true", help="print request and download information to console"
+)
+parser.add_argument("--version", action="version", version="Release date 2024-02-28")
 args = parser.parse_args()
 
 # if no gamefaqs user specified prompt for it
@@ -34,9 +35,9 @@ else:
     gfuser = args.gfuser
 
 # set variables from argparse
-# gfuser = httpx.utils.quote(gfuser)
 wait = args.wait
 dl_loops = args.downloads
+logging = args.logging
 
 if not args.savedir:
     savedir = Path(f"maps/{gfuser}")
@@ -44,7 +45,6 @@ else:
     savedir = Path(args.savedir)
 
 
-# function to remove illegal and annoying filename characters
 def sanitize(string) -> str:
     """Remove bad filename characters from string"""
     chars = "<>:\"'/\\|?*"
@@ -53,8 +53,26 @@ def sanitize(string) -> str:
     return string
 
 
-# functions for httpx requests and responses
+def print_report():
+    """Print ending report"""
+    files_count = 0
+    for file in savedir.iterdir():
+        if file.is_file():
+            files_count += 1
+    print(f"Files in folder: {files_count}")
+    print(f"Maps in profile: {maps_count}")
+
+
+def end_early():
+    """Stop early and exit"""
+    print("*** Q pressed! Stopping downloads early! ***")
+    bar.finish(dirty=True)
+    print_report()
+    sys.exit()
+
+
 def wait_check(response):
+    """Check and wait after number of responses"""
     global req_num
     try:
         req_num += 1
@@ -62,21 +80,31 @@ def wait_check(response):
         req_num = 1
     global wait
     global dl_loops
+    global q_pressed
 
     if req_num % dl_loops == 0:
+        bar.finish(dirty=True)
         print(f"=== Wait {wait} seconds on request number {req_num} ===")
-        time.sleep(wait)
+        for _ in range(wait):
+            if keyboard.is_pressed("q"):
+                keyboard.release("q")
+                end_early()
+            time.sleep(1)
+        bar.start()
     return
 
 
 def log_request(request):
-    print(f"{request.method} {request.url} - Waiting for response")
+    """Print request"""
+    if logging:
+        print(f"{request.method} {request.url} - waiting", end="")
     return
 
 
 def log_response(response):
-    request = response.request
-    print(f"{request.method} {request.url} - Status {response.status_code}")
+    """Print response code"""
+    if logging:
+        print(f" - status {response.status_code}")
     return
 
 
@@ -117,7 +145,7 @@ for result in results:
     game = sanitize(result.find_parent("div", {"class": "content"}).find("a").text)
     console = sanitize(result.find_parent("div", {"class": "pod"}).find("h3", {"class": "title"}).text)
     maps.append({"filename": f"{game} - {console} - {map}", "url": f"{base}{link}"})
-maps_num = len(maps)
+maps_count = len(maps)
 
 # make save dir if doesn't exist
 if not savedir.is_dir():
@@ -127,11 +155,13 @@ else:
     print(f"Saving to dir: {savedir.resolve()}")
 
 # loop and save files. counters for report. set new referer. progressbar
-print(f"{maps_num} maps found in {gfuser}'s profile")
-print("Starting downloads. Press Q to end early. (might not work while waiting)")
+print(f"{maps_count} maps found in {gfuser}'s profile")
+print("Starting downloads")
+print("Press Q to finish file download and end early. (might have to push a few times to get to work")
 i = 0
-bar = progressbar.ProgressBar(max_value=maps_num, redirect_stdout=True)
 s.headers["Referer"] = profile_maps
+bar = progressbar.ProgressBar(max_value=maps_count, redirect_stdout=True)
+bar.start()
 for map in maps:
     filename = Path(savedir / map["filename"])
     url = map["url"]
@@ -156,7 +186,7 @@ for map in maps:
         ".jxr",
         ".psd",
         ".ico",
-        ".heic"
+        ".heic",
     ]
     for ext in img_exts:
         filename_ext = Path(f"{filename}{ext}")
@@ -164,7 +194,8 @@ for map in maps:
             if filename_ext.stat().st_size == 0:  # check for blank file
                 continue
             else:
-                print(f"Skipped: {filename_ext.name}")
+                if logging:
+                    print(f"Skipped: {filename_ext.name}")
                 skip_to_next = True
                 continue
     if skip_to_next:  # skip to next download if matched a file ext
@@ -190,21 +221,16 @@ for map in maps:
     file_type = filetype.guess(filename)
     if file_type is not None:
         filename = filename.rename(f"{filename}.{file_type.extension}")
-    print(f"Downloaded: {filename.name}")
+    if logging:
+        print(f"Downloaded: {filename.name}")
 
     # progressbar update
     i += 1
     bar.update(i)
     if keyboard.is_pressed("q"):
-        print("*** Q pressed! Stopping downloads early! ***")
-        break
+        keyboard.release("q")
+        end_early()
 
-# end report
-files_num = 0
-for file in savedir.iterdir():
-    if file.is_file():
-        files_num += 1
-
+bar.finish()
 print("\n*** DONE ***")
-print(f"Files in folder: {files_num}")
-print(f"Maps in profile: {maps_num}")
+print_report()
