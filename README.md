@@ -11,9 +11,9 @@ Download the Python script and put it into a directory of your choosing. Then in
 This script requires the following third party libraries:
 * beautifulsoup4
 * filetype
+* httpx
 * keyboard
 * latest_user_agents
-* requests
 
 ## Usage
 
@@ -25,7 +25,7 @@ A basic command example would look like:
 
 This would download all the maps found in StarFighters76's profile to the following folder:
 
-`maps/StarFighters76`
+`./maps/StarFighters76`
 
 The script will also skip any maps with the same name that is in the download folder.
 
@@ -36,7 +36,7 @@ This is what the argment help look like from running the command:
 `python .\gfmapdl.py -h`
 
 ```
-usage: gfmapdl.py [-h] [-s SAVEDIR] [-w WAIT] [-d DOWNLOADS] [--version] gfuser
+usage: gfmapdl.py [-h] [-s SAVEDIR] [-w WAIT] [-d DOWNLOADS] [--logging] [--version] [gfuser]
 
 Supply a GameFAQs username to download all maps and charts
 
@@ -50,5 +50,6 @@ options:
   -w WAIT, --wait WAIT  wait time in seconds when script needs to pause (default: 30)
   -d DOWNLOADS, --downloads DOWNLOADS
                         how many downloads before waiting (default: 150)
+  --logging             print request and download information to console
   --version             show program's version number and exit
 ```
