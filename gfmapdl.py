@@ -3,6 +3,7 @@ Downloads maps from a GameFAQs profile
 """
 
 import argparse
+import signal
 import sys
 import time
 from pathlib import Path
@@ -12,7 +13,6 @@ import httpx
 import progressbar
 from bs4 import BeautifulSoup
 from latest_user_agents import get_random_user_agent
-from pynput import keyboard
 
 # command line arguments
 parser = argparse.ArgumentParser(description="Supply a GameFAQs username to download all maps and charts")
@@ -23,9 +23,15 @@ parser.add_argument(
 )
 parser.add_argument("-d", "--downloads", type=int, default=150, help="how many downloads before waiting (default: 150)")
 parser.add_argument(
+    "--overwrite",
+    default=False,
+    action="store_true",
+    help="overwrites existing files (useful if existing maps have been updated)",
+)
+parser.add_argument(
     "--logging", default=False, action="store_true", help="print request and download information to console"
 )
-parser.add_argument("--version", action="version", version="Release date 2024-02-28")
+parser.add_argument("--version", action="version", version="Release date 2024-03-03")
 args = parser.parse_args()
 
 # if no gamefaqs user specified prompt for it
@@ -38,6 +44,7 @@ else:
 wait = args.wait
 dl_loops = args.downloads
 logging = args.logging
+overwrite = args.overwrite
 
 if not args.savedir:
     savedir = Path(f"maps/{gfuser}")
@@ -45,11 +52,8 @@ else:
     savedir = Path(args.savedir)
 
 
-def on_press(key):
-    """Stop listener on esc press"""
-    if key == keyboard.Key.esc:
-        esc.stop()
-        return False
+def signal_handler(sig, frame):
+    end_early()
 
 
 def sanitize(string) -> str:
@@ -72,7 +76,7 @@ def print_report():
 
 def end_early():
     """Stop early and exit"""
-    print("*** Esc pressed! Stopping downloads early! ***")
+    print("*** Ctrl+C pressed! Stopping downloads early! ***")
     bar.finish(dirty=True)
     print_report()
     sys.exit()
@@ -87,16 +91,11 @@ def wait_check(response):
         req_num = 1
     global wait
     global dl_loops
-    global q_pressed
 
     if req_num % dl_loops == 0:
-        bar.finish(dirty=True)
-        print(f"=== Wait {wait} seconds on request number {req_num} ===")
-        for _ in range(wait):
-            if not esc.running:
-                end_early()
-            time.sleep(1)
-        bar.start()
+        if logging:
+            print(f"=== Wait {wait} seconds on request number {req_num} ===")
+        time.sleep(wait)
     return
 
 
@@ -114,10 +113,6 @@ def log_response(response):
     return
 
 
-# start listener for esc pressed
-esc = keyboard.Listener(on_press=on_press)
-esc.start()
-
 # some settings for headers and urls
 base = "https://gamefaqs.gamespot.com"
 profile = f"{base}/community/{gfuser}/contributions"
@@ -133,6 +128,7 @@ headers = {
 s = httpx.Client(
     base_url=base,
     follow_redirects=True,
+    timeout=60.0,
     headers=headers,
     event_hooks={"request": [wait_check, log_request], "response": [log_response]},
 )
@@ -164,84 +160,97 @@ if not savedir.is_dir():
 else:
     print(f"Saving to dir: {savedir.resolve()}")
 
+signal.signal(signal.SIGINT, signal_handler)
+
+widgets = [
+    progressbar.Percentage(),
+    " ",
+    progressbar.SimpleProgress("(%(value_s)s of %(max_value_s)s)"),
+    " ",
+    progressbar.Bar(),
+    " ",
+    progressbar.Timer()
+]
+
 # loop and save files. counters for report. set new referer. progressbar
 print(f"{maps_count} maps found in {gfuser}'s profile")
-print("Starting downloads (press esc to finish current file download and end early)")
+print(f"Will wait {wait} seconds every {dl_loops} requests")
+print("Starting downloads (press ctrl+c to end early)")
 i = 0
 s.headers["Referer"] = profile_maps
-bar = progressbar.ProgressBar(max_value=maps_count, redirect_stdout=True)
-bar.start()
-for map in maps:
-    filename = Path(savedir / map["filename"])
-    url = map["url"]
+with progressbar.ProgressBar(prefix="Downloading", widgets=widgets, min_value=i, max_value=maps_count, redirect_stdout=True) as bar:
+    for map in maps:
+        filename = Path(savedir / map["filename"])
+        url = map["url"]
 
-    # skip download if file already exists
-    skip_to_next = False
-    img_exts = [
-        "",
-        ".dwg",
-        ".xcf",
-        ".jpg",
-        ".jpeg",
-        ".jpx",
-        ".png",
-        ".apng",
-        ".gif",
-        ".webp",
-        ".cr2",
-        ".tif",
-        ".tiff",
-        ".bmp",
-        ".jxr",
-        ".psd",
-        ".ico",
-        ".heic",
-    ]
-    for ext in img_exts:
-        filename_ext = Path(f"{filename}{ext}")
-        if filename_ext.is_file():
-            if filename_ext.stat().st_size == 0:  # check for blank file
-                continue
-            else:
-                if logging:
-                    print(f"Skipped: {filename_ext.name}")
-                skip_to_next = True
-                continue
-    if skip_to_next:  # skip to next download if matched a file ext
-        if not esc.running:
-            end_early()
+        # skip download if file already exists unless overwrite set
         skip_to_next = False
+        if not overwrite:
+            img_exts = [
+                "",
+                ".dwg",
+                ".xcf",
+                ".jpg",
+                ".jpeg",
+                ".jpx",
+                ".png",
+                ".apng",
+                ".gif",
+                ".webp",
+                ".cr2",
+                ".tif",
+                ".tiff",
+                ".bmp",
+                ".jxr",
+                ".psd",
+                ".ico",
+                ".heic",
+            ]
+            for ext in img_exts:
+                filename_ext = Path(filename.with_suffix(ext))
+                if filename_ext.is_file():
+                    if filename_ext.stat().st_size == 0:  # check for blank file
+                        continue
+                    else:
+                        if logging:
+                            print(f"Skipped: {filename_ext.name}")
+                        skip_to_next = True
+                        continue
+        if skip_to_next:  # skip to next download if matched a file ext
+            skip_to_next = False
+            i += 1
+            bar.update(i)
+            continue
+
+        # using split to figure out img url
+        url_split1 = url.rsplit("/", 1)
+        url_split2 = url_split1[1].split("-", 1)
+        url_part1 = url_split1[0]
+        url_part2 = url_split2[0]
+        img = f"{url_part1}/{url_part2}?raw=1"
+
+        # downloading image and writing as filename.tmp
+        filename_temp = Path(filename.with_suffix(".tmp"))
+        with open(filename_temp, "wb") as f:
+            with s.stream("GET", img) as r:
+                for chunk in r.iter_bytes():
+                    f.write(chunk)
+
+        # renaming file based on guessed type
+        file_type = filetype.guess(filename_temp)
+        new_ext = f".{file_type.extension}"
+        if file_type is not None:
+            if overwrite:
+                filename_new = filename_temp.replace(filename.with_suffix(new_ext))
+            else:
+                filename_new = filename_temp.rename(filename.with_suffix(new_ext))
+
+        if logging:
+            print(f"Downloaded: {filename_new.name}")
+
+        # progressbar update
         i += 1
         bar.update(i)
-        continue
 
-    # using split to figure out img url
-    url_split1 = url.rsplit("/", 1)
-    url_split2 = url_split1[1].split("-", 1)
-    url_part1 = url_split1[0]
-    url_part2 = url_split2[0]
-    img = f"{url_part1}/{url_part2}?raw=1"
-
-    # downloading image and writing as filename
-    with open(filename, "wb") as f:
-        with s.stream("GET", img) as r:
-            for chunk in r.iter_bytes():
-                f.write(chunk)
-
-    # renaming file based on guessed type
-    file_type = filetype.guess(filename)
-    if file_type is not None:
-        filename = filename.rename(f"{filename}.{file_type.extension}")
-    if logging:
-        print(f"Downloaded: {filename.name}")
-
-    # progressbar update
-    i += 1
-    bar.update(i)
-    if not esc.running:
-        end_early()
-
-esc.stop()
-bar.finish()
 print("\n*** DONE ***")
 print_report()

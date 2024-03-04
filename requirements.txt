@@ -3,4 +3,3 @@ filetype
 httpx
 latest-user-agents
 progressbar2
-pynput
