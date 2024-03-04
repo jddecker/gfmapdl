@@ -1,5 +1,6 @@
 beautifulsoup4
 filetype
 httpx
-keyboard
 latest-user-agents
+progressbar2
+pynput

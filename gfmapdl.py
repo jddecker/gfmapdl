@@ -9,10 +9,10 @@ from pathlib import Path
 
 import filetype
 import httpx
-import keyboard
 import progressbar
 from bs4 import BeautifulSoup
 from latest_user_agents import get_random_user_agent
+from pynput import keyboard
 
 # command line arguments
 parser = argparse.ArgumentParser(description="Supply a GameFAQs username to download all maps and charts")
@@ -45,6 +45,13 @@ else:
     savedir = Path(args.savedir)
 
 
+def on_press(key):
+    """Stop listener on esc press"""
+    if key == keyboard.Key.esc:
+        esc.stop()
+        return False
+
+
 def sanitize(string) -> str:
     """Remove bad filename characters from string"""
     chars = "<>:\"'/\\|?*"
@@ -65,7 +72,7 @@ def print_report():
 
 def end_early():
     """Stop early and exit"""
-    print("*** Q pressed! Stopping downloads early! ***")
+    print("*** Esc pressed! Stopping downloads early! ***")
     bar.finish(dirty=True)
     print_report()
     sys.exit()
@@ -86,8 +93,7 @@ def wait_check(response):
         bar.finish(dirty=True)
         print(f"=== Wait {wait} seconds on request number {req_num} ===")
         for _ in range(wait):
-            if keyboard.is_pressed("q"):
-                keyboard.release("q")
+            if not esc.running:
                 end_early()
             time.sleep(1)
         bar.start()
@@ -107,6 +113,10 @@ def log_response(response):
         print(f" - status {response.status_code}")
     return
 
+
+# start listener for esc pressed
+esc = keyboard.Listener(on_press=on_press)
+esc.start()
 
 # some settings for headers and urls
 base = "https://gamefaqs.gamespot.com"
@@ -156,8 +166,7 @@ else:
 
 # loop and save files. counters for report. set new referer. progressbar
 print(f"{maps_count} maps found in {gfuser}'s profile")
-print("Starting downloads")
-print("Press Q to finish file download and end early. (might have to push a few times to get to work")
+print("Starting downloads (press esc to finish current file download and end early)")
 i = 0
 s.headers["Referer"] = profile_maps
 bar = progressbar.ProgressBar(max_value=maps_count, redirect_stdout=True)
@@ -199,6 +208,8 @@ for map in maps:
                 skip_to_next = True
                 continue
     if skip_to_next:  # skip to next download if matched a file ext
+        if not esc.running:
+            end_early()
         skip_to_next = False
         i += 1
         bar.update(i)
@@ -227,10 +238,10 @@ for map in maps:
     # progressbar update
     i += 1
     bar.update(i)
-    if keyboard.is_pressed("q"):
-        keyboard.release("q")
+    if not esc.running:
         end_early()
 
+esc.stop()
 bar.finish()
 print("\n*** DONE ***")
 print_report()
