@@ -1,19 +1,29 @@
-# GameFAQs Map Downlaod
+# GameFAQs Map Download
 
-gfmapdl.py is a simple map download for GameFAQs contributors.
+gfmapdl is a simple map download for GameFAQs contributors.
 
 ## Installation
 
-Download the Python script and put it into a directory of your choosing. Then install the requirements:
+Releases come in two versions
+
+| File        | Description                                           |
+| ----------- | ----------------------------------------------------- |
+| gfmapdl     | Platform-independent zipapp file. Needs Python to run |
+| gfmapdl.exe | Windows x64 binary                                    |
+
+### Running From Source
+
+Download the repository and then install the requirements:
 
 `pip install -r requirements.txt`
 
-This script requires the following third party libraries:
+This script requires the following third party libraries and their dependencies:
 * beautifulsoup4
 * filetype
 * httpx
 * keyboard
 * latest_user_agents
+* progressbar2
 
 ## Usage
 
