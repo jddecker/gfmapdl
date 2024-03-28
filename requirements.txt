@@ -2,4 +2,4 @@ beautifulsoup4
 filetype
 httpx
 latest-user-agents
-progressbar2
+rich

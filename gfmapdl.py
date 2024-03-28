@@ -10,9 +10,9 @@ from pathlib import Path
 
 import filetype
 import httpx
-import progressbar
 from bs4 import BeautifulSoup
 from latest_user_agents import get_random_user_agent
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 # command line arguments
 parser = argparse.ArgumentParser(description="Supply a GameFAQs username to download all maps and charts")
@@ -46,11 +46,6 @@ dl_loops = args.downloads
 logging = args.logging
 overwrite = args.overwrite
 
-if not args.savedir:
-    savedir = Path(f"maps/{gfuser}")
-else:
-    savedir = Path(args.savedir)
-
 
 def signal_handler(sig, frame):
     end_early()
@@ -77,7 +72,8 @@ def print_report():
 def end_early():
     """Stop early and exit"""
     print("*** Ctrl+C pressed! Stopping downloads early! ***")
-    bar.finish(dirty=True)
+    progress.update(task, description="[red]Ended early")
+    progress.stop()
     print_report()
     sys.exit()
 
@@ -95,7 +91,9 @@ def wait_check(response):
     if req_num % dl_loops == 0:
         if logging:
             print(f"=== Wait {wait} seconds on request number {req_num} ===")
+        progress.update(task, description="[yellow]Waiting")
         time.sleep(wait)
+        progress.update(task, description="[blue]Downloading")
     return
 
 
@@ -133,6 +131,7 @@ s = httpx.Client(
     event_hooks={"request": [wait_check, log_request], "response": [log_response]},
 )
 
+# check if maps exist in profile
 page = s.get(profile_maps)
 if page.status_code != httpx.codes.ok:
     print(f"Error {page.status_code}: Could not access maps contribution page at: {profile}")
@@ -142,6 +141,13 @@ results = soup.select("a.link_color")
 if len(results) == 0:
     print(f"{gfuser}'s profile at {profile_maps} contained no maps")
     sys.exit()
+
+# get profile name formatted and set download folder
+profile_name = sanitize(soup.select_one("title").text.split(" - ")[-1])
+if not args.savedir:
+    savedir = Path(f"maps/{profile_name}")
+else:
+    savedir = Path(args.savedir)
 
 # get list of dict with filename without extension (game - console - map name) and url to map
 maps = []
@@ -162,23 +168,21 @@ else:
 
 signal.signal(signal.SIGINT, signal_handler)
 
-widgets = [
-    progressbar.Percentage(),
-    " ",
-    progressbar.SimpleProgress("(%(value_s)s of %(max_value_s)s)"),
-    " ",
-    progressbar.Bar(),
-    " ",
-    progressbar.Timer()
-]
-
 # loop and save files. counters for report. set new referer. progressbar
-print(f"{maps_count} maps found in {gfuser}'s profile")
+print(f"{maps_count} maps found in {profile_name}'s profile")
 print(f"Will wait {wait} seconds every {dl_loops} requests")
 print("Starting downloads (press ctrl+c to end early)")
-i = 0
 s.headers["Referer"] = profile_maps
-with progressbar.ProgressBar(prefix="Downloading", widgets=widgets, min_value=i, max_value=maps_count, redirect_stdout=True) as bar:
+
+progress = Progress(
+    TextColumn("[progress.description]{task.description}"),
+    BarColumn(),
+    TaskProgressColumn(),
+    MofNCompleteColumn(),
+    TimeElapsedColumn(),
+)
+with progress:
+    task = progress.add_task("[blue]Downloading", total=maps_count)
     for map in maps:
         filename = Path(savedir / map["filename"])
         url = map["url"]
@@ -218,8 +222,9 @@ with progressbar.ProgressBar(prefix="Downloading", widgets=widgets, min_value=i,
                         continue
         if skip_to_next:  # skip to next download if matched a file ext
             skip_to_next = False
-            i += 1
-            bar.update(i)
+            progress.update(task, advance=1)
+            if progress.finished:
+                progress.update(task, description="[green]Finished")
             continue
 
         # using split to figure out img url
@@ -249,8 +254,10 @@ with progressbar.ProgressBar(prefix="Downloading", widgets=widgets, min_value=i,
             print(f"Downloaded: {filename_new.name}")
 
         # progressbar update
-        i += 1
-        bar.update(i)
+        progress.update(task, advance=1)
+
+        if progress.finished:
+            progress.update(task, description="[green]Finished")
 
 print("\n*** DONE ***")
 print_report()
