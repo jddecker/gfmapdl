@@ -31,7 +31,7 @@ parser.add_argument(
 parser.add_argument(
     "--logging", default=False, action="store_true", help="print request and download information to console"
 )
-parser.add_argument("--version", action="version", version="Release date 2024-03-03")
+parser.add_argument("--version", action="version", version="Release date 2024-03-27")
 args = parser.parse_args()
 
 # if no gamefaqs user specified prompt for it
