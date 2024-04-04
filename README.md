@@ -6,10 +6,10 @@ gfmapdl is a simple map downloader for GameFAQs contributors.
 
 Releases come in two versions
 
-| File        | Description                                           |
-| ----------- | ----------------------------------------------------- |
-| gfmapdl     | Platform-independent zipapp file. Needs Python to run |
-| gfmapdl.exe | Windows x64 binary                                    |
+| File                                                                                    | Description                                           |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [gfmapdl](https://github.com/jddecker/gfmapdl/releases/latest/download/gfmapdl)         | Platform-independent zipapp file. Needs Python to run |
+| [gfmapdl.exe](https://github.com/jddecker/gfmapdl/releases/latest/download/gfmapdl.exe) | Windows x64 binary                                    |
 
 ### Running From Source
 
