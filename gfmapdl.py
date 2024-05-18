@@ -3,6 +3,7 @@ Downloads maps from a GameFAQs profile
 """
 
 import argparse
+import logging
 import signal
 import sys
 import time
@@ -12,16 +13,17 @@ import filetype
 import httpx
 from bs4 import BeautifulSoup
 from latest_user_agents import get_random_user_agent
+from rich.logging import RichHandler
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 # command line arguments
 parser = argparse.ArgumentParser(description="Supply a GameFAQs username to download all maps and charts")
 parser.add_argument("gfuser", type=str, nargs="?", help="gamefaqs.gamespot.com username to get maps from (required)")
-parser.add_argument("-s", "--savedir", type=str, help="save directory to download to (default: maps/<user>)")
+parser.add_argument("-p", "--path", type=str, help="save directory to download to (default: maps/<user>)")
 parser.add_argument(
-    "-w", "--wait", type=int, default=30, help="wait time in seconds when script needs to pause (default: 30)"
+    "--wait", type=int, default=30, help="wait time in seconds when script needs to pause (default: 30)"
 )
-parser.add_argument("-d", "--downloads", type=int, default=150, help="how many downloads before waiting (default: 150)")
+parser.add_argument("--dlcount", type=int, default=150, help="how many downloads before waiting (default: 150)")
 parser.add_argument(
     "--overwrite",
     default=False,
@@ -29,9 +31,13 @@ parser.add_argument(
     help="overwrites existing files (useful if existing maps have been updated)",
 )
 parser.add_argument(
-    "--logging", default=False, action="store_true", help="print request and download information to console"
+    "--verbose",
+    type=str,
+    nargs="?",
+    default=False,
+    help="print detailed information to console. Detail options: debug, info, warning, error, critical",
 )
-parser.add_argument("--version", action="version", version="Release date 2024-03-27")
+parser.add_argument("-v", "--version", action="version", version="Release date 2024-05-18")
 args = parser.parse_args()
 
 # if no gamefaqs user specified prompt for it
@@ -42,9 +48,21 @@ else:
 
 # set variables from argparse
 wait = args.wait
-dl_loops = args.downloads
-logging = args.logging
+dl_loops = args.dlcount
+verbose = args.verbose
 overwrite = args.overwrite
+savedir = args.path
+
+if not verbose or verbose.upper() not in ["INFO", "WARNING", "ERROR", "CRITICAL"]:
+    verbose_level = "WARNING"
+else:
+    verbose_level = verbose.upper()
+
+# setup logger
+logging.basicConfig(level=f"{verbose_level}", format="%(message)s", handlers=[RichHandler()])
+log = logging.getLogger(__name__)
+if not verbose:
+    logging.disable(logging.CRITICAL)
 
 
 def signal_handler(sig, frame):
@@ -71,7 +89,7 @@ def print_report():
 
 def end_early():
     """Stop early and exit"""
-    print("*** Ctrl+C pressed! Stopping downloads early! ***")
+    log.warning("Ctrl+C pressed! Stopping downloads early!")
     progress.update(task, description="[red]Ended early")
     progress.stop()
     print_report()
@@ -89,8 +107,7 @@ def wait_check(response):
     global dl_loops
 
     if req_num % dl_loops == 0:
-        if logging:
-            print(f"=== Wait {wait} seconds on request number {req_num} ===")
+        log.info(f"Wait {wait} seconds on request number {req_num}")
         progress.update(task, description="[yellow]Waiting")
         time.sleep(wait)
         progress.update(task, description="[blue]Downloading")
@@ -99,15 +116,13 @@ def wait_check(response):
 
 def log_request(request):
     """Print request"""
-    if logging:
-        print(f"{request.method} {request.url} - waiting", end="")
+    log.info(f"{request.method} {request.url}")
     return
 
 
 def log_response(response):
     """Print response code"""
-    if logging:
-        print(f" - status {response.status_code}")
+    log.info(f"{response.url} status: {response.status_code}")
     return
 
 
@@ -133,18 +148,21 @@ s = httpx.Client(
 
 # check if maps exist in profile
 page = s.get(profile_maps)
+log.info(f"GET {page.url} status: {page.status_code}")
 if page.status_code != httpx.codes.ok:
-    print(f"Error {page.status_code}: Could not access maps contribution page at: {profile}")
+    print(f"{page.status_code}: Could not access maps contribution page at: {profile}")
+    log.error(f"{page.url} could not be accessed. Status: {page.status_code}")
     sys.exit()
 soup = BeautifulSoup(page.text, "html.parser")
 results = soup.select("a.link_color")
 if len(results) == 0:
     print(f"{gfuser}'s profile at {profile_maps} contained no maps")
+    log.warning(f"{page.url} has no maps")
     sys.exit()
 
 # get profile name formatted and set download folder
 profile_name = sanitize(soup.select_one("title").text.split(" - ")[-1])
-if not args.savedir:
+if not savedir:
     savedir = Path(f"maps/{profile_name}")
 else:
     savedir = Path(args.savedir)
@@ -216,8 +234,7 @@ with progress:
                     if filename_ext.stat().st_size == 0:  # check for blank file
                         continue
                     else:
-                        if logging:
-                            print(f"Skipped: {filename_ext.name}")
+                        log.info(f"Skipped: {filename_ext.name}")
                         skip_to_next = True
                         continue
         if skip_to_next:  # skip to next download if matched a file ext
@@ -250,8 +267,7 @@ with progress:
             else:
                 filename_new = filename_temp.rename(filename.with_suffix(new_ext))
 
-        if logging:
-            print(f"Downloaded: {filename_new.name}")
+        log.info(f"Downloaded: {filename_new.name}")
 
         # progressbar update
         progress.update(task, advance=1)
