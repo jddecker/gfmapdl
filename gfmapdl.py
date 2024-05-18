@@ -53,7 +53,7 @@ verbose = args.verbose
 overwrite = args.overwrite
 savedir = args.path
 
-if not verbose or verbose.upper() not in ["INFO", "WARNING", "ERROR", "CRITICAL"]:
+if not verbose or verbose.upper() not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
     verbose_level = "WARNING"
 else:
     verbose_level = verbose.upper()
