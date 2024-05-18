@@ -43,23 +43,27 @@ The script will also skip any maps with the same name that is in the download fo
 ## Command Line Help
 
 ```
-usage: gfmapdl.exe [-h] [-s SAVEDIR] [-w WAIT] [-d DOWNLOADS] [--overwrite] [--logging] [--version] [gfuser]
+usage: gfmapdl.py [-h] [-p PATH] [--wait WAIT] [--dlcount DLCOUNT] [--overwrite]
+                  [--verbose [VERBOSE]] [-v]
+                  [gfuser]
 
 Supply a GameFAQs username to download all maps and charts
 
 positional arguments:
-  gfuser                gamefaqs.gamespot.com username to get maps from (required)
+  gfuser                gamefaqs.gamespot.com username to get maps from
+                        (required)
 
 options:
   -h, --help            show this help message and exit
-  -s SAVEDIR, --savedir SAVEDIR
-                        save directory to download to (default: maps/<user>)
-  -w WAIT, --wait WAIT  wait time in seconds when script needs to pause (default: 30)
-  -d DOWNLOADS, --downloads DOWNLOADS
-                        how many downloads before waiting (default: 150)
-  --overwrite           overwrites existing files (useful if existing maps have been updated)
-  --logging             print request and download information to console
-  --version             show program's version number and exit
+  -p PATH, --path PATH  save directory to download to (default: maps/<user>)
+  --wait WAIT           wait time in seconds when script needs to pause (default:
+                        30)
+  --dlcount DLCOUNT     how many downloads before waiting (default: 150)
+  --overwrite           overwrites existing files (useful if existing maps have
+                        been updated)
+  --verbose [VERBOSE]   print detailed information to console. Detail options:
+                        debug, info, warning, error, critical
+  -v, --version         show program's version number and exit
 ```
 
 ## Building
