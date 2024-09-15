@@ -73,7 +73,7 @@ options:
 1. Download repository
 2. Create directories in the downloaded files called zipapp and dist
 3. Copy gfmapdl.py to the zipapp directory
-4. Rename gfmapdl.py in the zipapp directory to __main__.py
+4. Rename gfmapdl.py in the zipapp directory to \_\_main\_\_.py
 5. Install dependencies to the zipapp directory with the following command `python -m pip install -t zipapp -r requirements.txt --no-binary ":all:"`
 6. Build zipapp with the command `python -m zipapp -p "/usr/bin/env python3" -c -o dist/gfmapdl zipapp`
 
